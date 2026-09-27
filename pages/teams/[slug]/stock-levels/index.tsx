@@ -45,6 +45,17 @@ export default function StockLevels() {
         },
       },
       { accessorKey: 'reserved', header: 'Reserved', size: 120 },
+      {
+        // What a connected store can sell: on hand minus what's held for checkouts in progress.
+        id: 'available',
+        accessorFn: (l) => Math.max(0, l.onHand - l.reserved),
+        header: 'Available',
+        size: 120,
+        cell: ({ getValue }) => {
+          const available = getValue<number>();
+          return <span className={available === 0 ? 'font-medium text-amber-600' : ''}>{available}</span>;
+        },
+      },
     ],
     []
   );

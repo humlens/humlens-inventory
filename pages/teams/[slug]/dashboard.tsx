@@ -8,6 +8,7 @@ import { LayoutDashboard, Package, AlertTriangle, ShoppingCart, Sparkles, ArrowR
 import Layout from '@/components/Layout';
 import StatCard from '@/components/StatCard';
 import Badge from '@/components/Badge';
+import IntegrationAlert from '@/components/IntegrationAlert';
 import HorizontalBarChart from '@/components/charts/HorizontalBarChart';
 import { apiFetch } from '@/lib/fetcher';
 import { requireTeamPage } from '@/lib/pageAuth';
@@ -61,6 +62,7 @@ export default function Dashboard({ role }: { role: string }) {
 
   return (
     <Layout title="Dashboard" icon={LayoutDashboard} iconTone="brand">
+      <IntegrationAlert slug={slug} />
       <div className="mb-6 flex items-center gap-2">
         <span className="badge bg-gray-100 text-gray-600 ring-gray-500/10">Signed in as {role}</span>
       </div>

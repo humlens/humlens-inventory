@@ -40,6 +40,8 @@ const statusTone: Record<string, Tone> = {
   PROPOSED: 'warning',
   REJECTED_BY_POLICY: 'neutral',
   OVERRIDDEN_BY_HUMAN: 'purple',
+  DELIVERED: 'success',
+  FAILED: 'danger',
 };
 
 export default function Badge({ status }: { status: string }) {

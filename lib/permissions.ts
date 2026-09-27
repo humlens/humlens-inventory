@@ -34,7 +34,8 @@ export type Resource =
   | 'stock_adjustment'
   | 'cycle_count'
   | 'agent_policy'
-  | 'agent_action';
+  | 'agent_action'
+  | 'audit_log';
 
 export type Permission = {
   resource: Resource;
@@ -72,6 +73,7 @@ export const permissions: RolePermissions = {
     { resource: 'cycle_count', actions: '*' },
     { resource: 'agent_policy', actions: '*' },
     { resource: 'agent_action', actions: '*' },
+    { resource: 'audit_log', actions: ['read'] },
   ],
   ADMIN: [
     { resource: 'team', actions: ['read', 'update'] },
@@ -90,6 +92,7 @@ export const permissions: RolePermissions = {
     { resource: 'cycle_count', actions: '*' },
     { resource: 'agent_policy', actions: '*' },
     { resource: 'agent_action', actions: ['read', 'approve', 'reject'] },
+    { resource: 'audit_log', actions: ['read'] },
   ],
   WAREHOUSE_MANAGER: [
     { resource: 'team', actions: ['read', 'leave'] },
@@ -141,6 +144,7 @@ export const permissions: RolePermissions = {
     { resource: 'stock_adjustment', actions: ['read'] },
     { resource: 'cycle_count', actions: ['read'] },
     { resource: 'agent_action', actions: ['read'] },
+    { resource: 'audit_log', actions: ['read'] },
   ],
 };
 

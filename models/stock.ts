@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { StockTransactionType } from '@prisma/client';
 import { ApiError } from '@/lib/errors';
+import { notifyStore } from '@/lib/outbox';
 
 const OUTBOUND: StockTransactionType[] = ['ISSUE', 'TRANSFER_OUT', 'ADJUSTMENT_OUT'];
 const INBOUND: StockTransactionType[] = ['RECEIPT', 'TRANSFER_IN', 'ADJUSTMENT_IN'];
@@ -51,8 +52,19 @@ export const applyStockMovement = async (params: {
     });
 
     return { level: updated, transaction };
+  }).then(async (result) => {
+    await notifyStockChanged(teamId, [itemId]);
+    return result;
   });
 };
+
+// Lets a connected store refresh these items' stock straight away.
+export async function notifyStockChanged(teamId: string, itemIds: string[]) {
+  const items = await prisma.item.findMany({ where: { id: { in: itemIds } }, select: { sku: true } });
+  await notifyStore(teamId, 'stock.changed', { skus: items.map((item) => item.sku) }, { key: 'skus' }).catch((error) =>
+    console.error('Could not queue store notification', error)
+  );
+}
 
 export const listStockLevels = async (
   teamId: string,

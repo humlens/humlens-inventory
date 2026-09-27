@@ -18,6 +18,7 @@ type AgentAction = {
   id: string;
   type: string;
   status: string;
+  output?: { reorderPoint?: number; reorderQty?: number };
   reasoning: string | null;
   createdAt: string;
 };
@@ -27,6 +28,7 @@ export default function AgentActions() {
   const slug = router.query.slug as string;
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [tuning, setTuning] = useState(false);
 
   const { data: actions, isLoading } = useQuery({
     queryKey: ['agent-actions', slug],
@@ -47,6 +49,33 @@ export default function AgentActions() {
     }
   };
 
+  const suggestLevels = async () => {
+    setTuning(true);
+    try {
+      const result = await apiPost<{ suggestions: unknown[] }>(`/api/teams/${slug}/agent-actions`, { agent: 'reorder-levels' });
+      toast.success(
+        result.suggestions.length
+          ? `${result.suggestions.length} reorder level suggestion${result.suggestions.length === 1 ? '' : 's'} to review below.`
+          : 'Reorder levels already match recent sales — nothing to change.'
+      );
+      queryClient.invalidateQueries({ queryKey: ['agent-actions', slug] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Something went wrong.');
+    } finally {
+      setTuning(false);
+    }
+  };
+
+  const review = async (action: AgentAction, status: 'EXECUTED' | 'OVERRIDDEN_BY_HUMAN') => {
+    try {
+      await apiPost(`/api/teams/${slug}/agent-actions/${action.id}/review`, { status });
+      toast.success(status === 'EXECUTED' ? 'Applied the new reorder levels.' : 'Dismissed.');
+      queryClient.invalidateQueries({ queryKey: ['agent-actions', slug] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Something went wrong.');
+    }
+  };
+
   const columns = useMemo<AppColumnDef<AgentAction>[]>(
     () => [
       {
@@ -63,8 +92,26 @@ export default function AgentActions() {
         size: 180,
         cell: ({ getValue }) => new Date(getValue<string>()).toLocaleString(),
       },
+      {
+        id: 'review',
+        header: '',
+        size: 190,
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.type === 'REORDER_POINT_SUGGESTION' && row.original.status === 'PROPOSED' ? (
+            <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <button type="button" className="btn-primary px-2.5 py-1 text-xs" onClick={() => review(row.original, 'EXECUTED')}>
+                Apply
+              </button>
+              <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => review(row.original, 'OVERRIDDEN_BY_HUMAN')}>
+                Dismiss
+              </button>
+            </div>
+          ) : null,
+      },
     ],
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
   );
 
   const typeBreakdown = useMemo(() => {
@@ -83,9 +130,14 @@ export default function AgentActions() {
         <p className="text-sm text-gray-500">
           Every autonomous decision the inventory agents make — or decline to make — is logged here for review.
         </p>
-        <button className="btn-secondary" onClick={runChecks} disabled={busy}>
-          Run reorder &amp; dead-stock check
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" onClick={suggestLevels} disabled={tuning}>
+            {tuning ? 'Reviewing sales…' : 'Suggest reorder levels'}
+          </button>
+          <button className="btn-secondary" onClick={runChecks} disabled={busy}>
+            Run reorder &amp; dead-stock check
+          </button>
+        </div>
       </div>
 
       {typeBreakdown.length > 0 && (

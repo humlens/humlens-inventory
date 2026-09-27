@@ -96,6 +96,9 @@ model User {
   stockAdjustments      StockAdjustment[]
   createdCycleCounts    CycleCount[]
   agentActionsReviewed  AgentAction[]
+  auditLogs              AuditLog[]
+  tablePreferences       TablePreference[]
+  savedFilters           SavedFilter[]
 }
 
 model Team {
@@ -123,6 +126,13 @@ model Team {
   cycleCounts       CycleCount[]
   agentPolicy       AgentPolicy?
   agentActions      AgentAction[]
+  apiKeys           ApiKey[]
+  auditLogs         AuditLog[]
+  savedFilters      SavedFilter[]
+  connections       Connection[]
+  outboundEvents    OutboundEvent[]
+  reservations      Reservation[]
+  costUpdates       CostUpdate[]
 
   @@index([domain])
 }
@@ -184,6 +194,7 @@ model Warehouse {
   transfersTo       StockTransfer[]    @relation("TransferTo")
   stockAdjustments  StockAdjustment[]
   cycleCounts       CycleCount[]
+  reservations      Reservation[]
 
   @@unique([teamId, name])
   @@index([teamId])
@@ -234,6 +245,7 @@ model Item {
   stockAdjustments  StockAdjustment[]
   cycleCountLines   CycleCountLine[]
   agentActions      AgentAction[]
+  costUpdates       CostUpdate[]
 
   @@unique([teamId, sku])
   @@index([teamId])
@@ -556,6 +568,7 @@ model AgentPolicy {
 
 enum AgentActionType {
   AUTO_REORDER_SUGGESTION
+  REORDER_POINT_SUGGESTION
   DEAD_STOCK_ALERT
   CYCLE_COUNT_ANOMALY
   NL_STOCK_ADJUSTMENT
@@ -567,21 +580,46 @@ enum AgentActionStatus {
   EXECUTED
   REJECTED_BY_POLICY
   OVERRIDDEN_BY_HUMAN
+  REVERTED
+  FAILED
 }
 
+// One row per thing an agent did, proposed or noticed. A row with a `tool`
+// is a change that can be applied (and usually undone) through the action
+// registry in lib/actions; a row without one is a finding for people to read.
 model AgentAction {
   id              String            @id @default(uuid())
   teamId          String
   type            AgentActionType
   status          AgentActionStatus @default(PROPOSED)
+  // Which agent acted: reorder, reorder-tuning, dead-stock, cycle-count, nl-stock, procurement-reorder.
+  agent           String?
+  // One-line summary for the inbox, written when the action is proposed.
+  title           String?
   itemId          String?
   purchaseOrderId String?
   input           Json              @default("{}")
   output          Json              @default("{}")
+  // The exact change: an action name from lib/actions and its arguments.
+  tool            String?
+  args            Json?
+  // What applying it produced (ids and previous values), used to undo it.
+  result          Json?
+  evidence        Json              @default("[]")
   reasoning       String?
   confidence      Float?
+  aiModel         String?
+  aiTokens        Int?
+  error           String?
+  // The person whose request produced this action (e.g. a plain-English stock update).
+  requestedById   String?
   reviewedById    String?
   reviewedAt      DateTime?
+  // Null appliedById with appliedAt set means the agent applied it on its own.
+  appliedById     String?
+  appliedAt       DateTime?
+  revertedById    String?
+  revertedAt      DateTime?
   createdAt       DateTime          @default(now())
 
   team          Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -591,4 +629,213 @@ model AgentAction {
 
   @@index([teamId])
   @@index([type])
+  @@index([teamId, status])
+}
+
+// =========================================================================
+// Server-to-server access (a Humlens Commerce store, scripts)
+// =========================================================================
+
+// Only a SHA-256 hash is stored; the key itself is shown once, when it's
+// created. Calls made with a key act as the member who created it, with
+// that member's role — see lib/apiKey.ts.
+model ApiKey {
+  id          String    @id @default(uuid())
+  teamId      String
+  name        String
+  prefix      String
+  keyHash     String    @unique
+  createdById String
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+}
+
+// =========================================================================
+// Audit log — who did what, when, and through which entry point. Written by
+// lib/audit.ts after a mutating request succeeds; never updated or deleted
+// by the app.
+// =========================================================================
+
+enum AuditSource {
+  APP
+  API_KEY
+  MCP
+}
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  teamId      String
+  actorId     String?
+  // Snapshot so the entry still reads correctly after the user is deleted.
+  actorName   String
+  source      AuditSource @default(APP)
+  resource    String
+  action      String
+  targetId    String?
+  targetLabel String?
+  ipAddress   String?
+  createdAt   DateTime    @default(now())
+
+  team  Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+}
+
+// =========================================================================
+// Per-user UI preferences — the saved layout of each list table (visible,
+// ordered, sized and pinned columns, sorting, grouping, filters, page size,
+// density). Keyed by page route, so it follows the user across teams and
+// devices. Written by /api/me/table-preferences.
+// =========================================================================
+
+model TablePreference {
+  id        String   @id @default(uuid())
+  userId    String
+  tableKey  String
+  view      Json
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tableKey])
+}
+
+// A named set of table filter conditions (lib/advancedFilter.ts) for one list
+// page, kept for its creator or shared with the whole team. Managed through
+// /api/teams/[slug]/saved-filters.
+model SavedFilter {
+  id          String   @id @default(uuid())
+  teamId      String
+  createdById String
+  tableKey    String
+  name        String
+  filter      Json
+  shared      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([teamId, tableKey])
+}
+
+// =========================================================================
+// Connected apps — the other Humlens apps this team talks to, and every
+// message sent to them (lib/connections.ts, lib/outbox.ts).
+// =========================================================================
+
+enum ConnectionKind {
+  INVENTORY
+  PROCUREMENT
+  COMMERCE
+}
+
+// `secret` is encrypted (lib/secrets.ts): the other app's API key, or for
+// COMMERCE the key that signs notifications sent to the store.
+model Connection {
+  id            String         @id @default(uuid())
+  teamId        String
+  kind          ConnectionKind
+  url           String
+  secret        String
+  options       Json           @default("{}")
+  createdById   String?
+  lastSuccessAt DateTime?
+  lastError     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, kind])
+}
+
+enum OutboundStatus {
+  PENDING
+  DELIVERED
+  FAILED
+}
+
+// Outbox: written in the same step as the change it reports, then delivered
+// with retries, so a slow or offline app never loses an update. `reference`
+// is also what the receiving app de-duplicates on.
+model OutboundEvent {
+  id            String         @id @default(uuid())
+  teamId        String
+  target        ConnectionKind
+  kind          String
+  reference     String
+  payload       Json
+  status        OutboundStatus @default(PENDING)
+  attempts      Int            @default(0)
+  lastError     String?
+  nextAttemptAt DateTime       @default(now())
+  deliveredAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, reference])
+  @@index([status, nextAttemptAt])
+  @@index([teamId, createdAt])
+}
+
+
+// =========================================================================
+// Stock reservations — units held for a checkout that hasn't completed.
+// Held units are counted in StockLevel.reserved and excluded from what's
+// available to sell (models/reservation.ts).
+// =========================================================================
+
+enum ReservationStatus {
+  ACTIVE
+  CONSUMED
+  RELEASED
+  EXPIRED
+}
+
+model Reservation {
+  id          String            @id @default(uuid())
+  teamId      String
+  reference   String
+  warehouseId String
+  status      ReservationStatus @default(ACTIVE)
+  // [{ itemId, sku, quantity }]
+  lines       Json
+  expiresAt   DateTime
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @default(now()) @updatedAt
+
+  team      Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, reference])
+  @@index([status, expiresAt])
+}
+
+// Item cost changes from matched supplier invoices (moving average), one per
+// invoice line — applying the same invoice twice changes nothing.
+model CostUpdate {
+  id           String   @id @default(uuid())
+  teamId       String
+  itemId       String
+  reference    String
+  quantity     Int
+  unitCost     Decimal  @db.Decimal(12, 2)
+  previousCost Decimal  @db.Decimal(12, 2)
+  newCost      Decimal  @db.Decimal(12, 2)
+  createdAt    DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, reference, itemId])
 }

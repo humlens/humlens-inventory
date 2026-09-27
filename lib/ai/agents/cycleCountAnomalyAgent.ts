@@ -32,6 +32,13 @@ export async function runCycleCountAnomalyAgent(teamId: string, cycleCountId: st
     teamId,
     type: 'CYCLE_COUNT_ANOMALY',
     status: 'EXECUTED',
+    agent: 'cycle-count',
+    title: `${anomalies.length} count${anomalies.length === 1 ? '' : 's'} off by more than ${thresholdPct}% in “${cycleCount.name}”`,
+    evidence: [
+      { label: 'Warehouse', value: cycleCount.warehouse.name },
+      { label: 'Lines flagged', value: anomalies.length },
+      { label: 'Tolerance', value: `${thresholdPct}%` },
+    ],
     input: { cycleCountId, thresholdPct },
     output: { anomalies: anomalies.map((l) => ({ itemId: l.itemId, expectedQty: l.expectedQty, countedQty: l.countedQty, varianceQty: l.varianceQty })) },
     reasoning: `${anomalies.length} item(s) in "${cycleCount.name}" (${cycleCount.warehouse.name}) varied by more than ${thresholdPct}% of expected quantity:\n${reasoning}`,

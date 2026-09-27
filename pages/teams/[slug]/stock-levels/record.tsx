@@ -25,6 +25,9 @@ export default function RecordMovement() {
   const [prompt, setPrompt] = useState('');
   const [form, setForm] = useState({ itemId: '', warehouseId: '', type: 'RECEIPT', quantity: 1, note: '' });
   const [loading, setLoading] = useState(false);
+  // The agent proposal behind a plain-English draft: submitting approves it,
+  // so the movement is recorded once and the inbox shows it as done.
+  const [draftActionId, setDraftActionId] = useState<string | null>(null);
 
   const { data: items } = useQuery({
     queryKey: ['items', slug],
@@ -41,7 +44,7 @@ export default function RecordMovement() {
     e.preventDefault();
     setLoading(true);
     try {
-      const draft = await apiPost<{ itemId: string | null; warehouseId: string | null; type: string; quantity: number; note: string }>(
+      const draft = await apiPost<{ actionId: string | null; itemId: string | null; warehouseId: string | null; type: string; quantity: number; note: string }>(
         `/api/teams/${slug}/stock-transactions/draft-from-prompt`,
         { prompt }
       );
@@ -50,6 +53,7 @@ export default function RecordMovement() {
       } else {
         toast.success('Drafted — review before submitting.');
       }
+      setDraftActionId(draft.actionId);
       setForm({
         itemId: draft.itemId ?? '',
         warehouseId: draft.warehouseId ?? '',
@@ -69,7 +73,13 @@ export default function RecordMovement() {
     e.preventDefault();
     setLoading(true);
     try {
-      await apiPost(`/api/teams/${slug}/stock-transactions`, form);
+      if (draftActionId) {
+        await apiPost(`/api/teams/${slug}/agent-actions/${draftActionId}/approve`, {
+          args: { ...form, quantity: Number(form.quantity), note: form.note || undefined },
+        });
+      } else {
+        await apiPost(`/api/teams/${slug}/stock-transactions`, form);
+      }
       toast.success('Recorded.');
       router.push(`/teams/${slug}/stock-levels`);
     } catch (err) {

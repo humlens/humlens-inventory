@@ -12,6 +12,10 @@ export function validateWithSchema<T>(schema: ZodType<T, any, any>, data: unknow
   return result.data;
 }
 
+// A list page's route pattern (e.g. "/teams/[slug]/items"), used to key
+// table preferences and saved filters.
+export const tableKeySchema = z.string().regex(/^\/[\w\-/[\]]{1,200}$/, 'Invalid table key.');
+
 export const teamSlugSchema = z.object({
   slug: z.string().min(1),
 });

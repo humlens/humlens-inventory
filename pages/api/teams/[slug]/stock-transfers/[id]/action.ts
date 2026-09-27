@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
 
 import { guardTeamAccess, handleApiError } from '@/lib/apiGuard';
+import { setAuditEvent } from '@/lib/audit';
 import { completeStockTransfer, cancelStockTransfer } from 'models/transfer';
 import { validateWithSchema } from '@/lib/zod';
 
@@ -16,6 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { action } = validateWithSchema(actionSchema, req.body);
     const teamMember = await guardTeamAccess(req, res, 'stock_transfer', 'transfer');
+    setAuditEvent(res, { resource: 'stock_transfer', action });
     const id = req.query.id as string;
 
     const result =

@@ -50,15 +50,31 @@ export async function runDeadStockAgent(teamId: string) {
     )
     .join('\n');
 
-  const { text } = await generateText({
+  const { text, usage } = await generateText({
     model: agentModel,
     prompt: `Summarize this dead-stock finding for an inventory dashboard in 2-3 sentences, plain language, no markdown:\n\n${summaryLines}`,
   });
 
+  // Today's finding replaces any earlier one nobody has read yet.
+  await prisma.agentAction.updateMany({
+    where: { teamId, type: 'DEAD_STOCK_ALERT', tool: null, reviewedAt: null },
+    data: { reviewedAt: new Date() },
+  });
+
+  const units = flagged.reduce((sum, f) => sum + f.onHand, 0);
   return logAgentAction({
     teamId,
     type: 'DEAD_STOCK_ALERT',
     status: 'EXECUTED',
+    agent: 'dead-stock',
+    title: `${flagged.length} item${flagged.length === 1 ? '' : 's'} with no sales in ${thresholdDays}+ days`,
+    evidence: [
+      { label: 'Items', value: flagged.length },
+      { label: 'Units on hand', value: units },
+      { label: 'Threshold', value: `${thresholdDays} days` },
+    ],
+    aiModel: agentModel,
+    aiTokens: usage?.totalTokens,
     input: { thresholdDays, itemCount: flagged.length },
     output: { items: flagged.map((f) => ({ itemId: f.item.id, onHand: f.onHand, lastIssueAt: f.lastIssueAt })) },
     reasoning: text,

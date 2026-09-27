@@ -1,13 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-import { guardMcpAction, resolveMcpActor } from './context';
+import { auditMcp, guardMcpAction, resolveMcpActor } from './context';
 import { listItems, getItem, createItem } from 'models/item';
 import { listWarehouses } from 'models/warehouse';
-import { listStockLevels, applyStockMovement } from 'models/stock';
+import { listStockLevels } from 'models/stock';
 import { listSuppliers, createSupplier } from 'models/supplier';
-import { listPurchaseOrders, createPurchaseOrder } from 'models/purchaseOrder';
-import { listAgentActions } from 'models/agentAction';
+import { listPurchaseOrders } from 'models/purchaseOrder';
+import { approveAgentAction, getAgentInbox, listAgentActions, rejectAgentAction, undoAgentAction } from 'models/agentAction';
+import { runAction } from '@/lib/actions';
 import { runReorderAgent } from '@/lib/ai/agents/reorderAgent';
 import { draftStockMovementFromPrompt } from '@/lib/ai/agents/stockAdjustmentDraftAgent';
 
@@ -17,11 +18,11 @@ const json = (data: unknown) => ({
 
 // A single MCP server instance exposing the same inventory operations the
 // web UI and REST API offer, as tools an external agent (Claude, or any MCP
-// client) can call directly. Every write tool re-uses the exact
-// models/*.ts functions the API routes call, so there's one source of
-// truth for business rules regardless of entry point.
+// client) can call directly. Writes go through the same action registry
+// (lib/actions) the agents and the inbox use, so there's one source of truth
+// for validation and permissions regardless of entry point.
 export function createInventoryMcpServer() {
-  const server = new McpServer({ name: 'inventory-app', version: '0.1.0' });
+  const server = new McpServer({ name: 'humlens-inventory', version: '0.1.0' });
 
   server.registerTool(
     'list_items',
@@ -68,7 +69,7 @@ export function createInventoryMcpServer() {
     },
     async ({ teamSlug, actingUserEmail, ...params }) => {
       const actor = await guardMcpAction(teamSlug, actingUserEmail, 'item', 'create');
-      return json(await createItem({ teamId: actor.team.id, createdById: actor.user.id, ...params }));
+      return json(await auditMcp(actor, 'item', 'create', createItem({ teamId: actor.team.id, createdById: actor.user.id, ...params })));
     }
   );
 
@@ -121,7 +122,14 @@ export function createInventoryMcpServer() {
     },
     async ({ teamSlug, actingUserEmail, ...params }) => {
       const actor = await guardMcpAction(teamSlug, actingUserEmail, 'stock_transaction', 'create');
-      return json(await applyStockMovement({ teamId: actor.team.id, performedById: actor.user.id, ...params }));
+      return json(
+        await auditMcp(
+          actor,
+          'stock_transaction',
+          'create',
+          runAction('stock.move', { teamId: actor.team.id, userId: actor.user.id, role: actor.teamMember.role, source: 'mcp' }, params)
+        )
+      );
     }
   );
 
@@ -154,7 +162,7 @@ export function createInventoryMcpServer() {
     },
     async ({ teamSlug, actingUserEmail, ...params }) => {
       const actor = await guardMcpAction(teamSlug, actingUserEmail, 'supplier', 'create');
-      return json(await createSupplier({ teamId: actor.team.id, createdById: actor.user.id, ...params }));
+      return json(await auditMcp(actor, 'supplier', 'create', createSupplier({ teamId: actor.team.id, createdById: actor.user.id, ...params })));
     }
   );
 
@@ -198,7 +206,14 @@ export function createInventoryMcpServer() {
     },
     async ({ teamSlug, actingUserEmail, ...params }) => {
       const actor = await guardMcpAction(teamSlug, actingUserEmail, 'purchase_order', 'create');
-      return json(await createPurchaseOrder({ teamId: actor.team.id, createdById: actor.user.id, ...params }));
+      return json(
+        await auditMcp(
+          actor,
+          'purchase_order',
+          'create',
+          runAction('purchaseOrder.draft', { teamId: actor.team.id, userId: actor.user.id, role: actor.teamMember.role, source: 'mcp' }, params)
+        )
+      );
     }
   );
 
@@ -225,7 +240,7 @@ export function createInventoryMcpServer() {
     },
     async ({ teamSlug, actingUserEmail, prompt }) => {
       const actor = await guardMcpAction(teamSlug, actingUserEmail, 'stock_transaction', 'create');
-      return json(await draftStockMovementFromPrompt({ teamId: actor.team.id, prompt }));
+      return json(await draftStockMovementFromPrompt({ teamId: actor.team.id, prompt, requestedById: actor.user.id }));
     }
   );
 
@@ -241,6 +256,36 @@ export function createInventoryMcpServer() {
       return json(await listAgentActions(actor.team.id, limit));
     }
   );
+
+  server.registerTool(
+    'get_agent_inbox',
+    {
+      title: 'Get the agent inbox',
+      description:
+        'What needs a person (proposed changes with their evidence), what agents did on their own in the last two weeks (with whether it can be undone), and unread findings.',
+      inputSchema: { teamSlug: z.string(), actingUserEmail: z.string().email() },
+    },
+    async ({ teamSlug, actingUserEmail }) => {
+      const actor = await guardMcpAction(teamSlug, actingUserEmail, 'agent_action', 'read');
+      return json(await getAgentInbox(actor.team.id, { userId: actor.user.id, role: actor.teamMember.role }));
+    }
+  );
+
+  const reviewTool = (name: string, title: string, description: string, run: typeof undoAgentAction) =>
+    server.registerTool(
+      name,
+      { title, description, inputSchema: { teamSlug: z.string(), actingUserEmail: z.string().email(), actionId: z.string() } },
+      async ({ teamSlug, actingUserEmail, actionId }) => {
+        const actor = await resolveMcpActor(teamSlug, actingUserEmail);
+        return json(
+          await auditMcp(actor, 'agent_action', name === 'undo_agent_action' ? 'update' : name === 'reject_agent_action' ? 'reject' : 'approve',
+            run(actor.team.id, actionId, { userId: actor.user.id, role: actor.teamMember.role }))
+        );
+      }
+    );
+  reviewTool('approve_agent_action', 'Approve an agent action', 'Apply a change an agent proposed, as the acting user.', (teamId, id, reviewer) => approveAgentAction(teamId, id, reviewer));
+  reviewTool('reject_agent_action', 'Dismiss an agent action', 'Dismiss a change an agent proposed without applying it.', rejectAgentAction);
+  reviewTool('undo_agent_action', 'Undo an agent action', 'Reverse a change an agent (or a person approving it) applied.', undoAgentAction);
 
   return server;
 }

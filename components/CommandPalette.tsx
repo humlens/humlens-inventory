@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useSelector } from '@tanstack/react-store';
 import {
+  Inbox,
   LayoutDashboard,
   Package,
   Warehouse,
@@ -23,6 +24,7 @@ import { appUiStore, closeCommandPalette, toggleCommandPalette, pushRecentItem }
 import { iconToneClasses, type IconTone } from '@/lib/iconTones';
 
 const navCommands: { href: string; label: string; icon: typeof LayoutDashboard; tone: IconTone }[] = [
+  { href: 'inbox', label: 'Inbox', icon: Inbox, tone: 'brand' },
   { href: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, tone: 'brand' },
   { href: 'items', label: 'Items', icon: Package, tone: 'blue' },
   { href: 'warehouses', label: 'Warehouses', icon: Warehouse, tone: 'amber' },

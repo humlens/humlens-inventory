@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 import { guardTeamAccess, handleApiError } from '@/lib/apiGuard';
+import { setAuditEvent } from '@/lib/audit';
 import { submitCycleCountLines, getCycleCount } from 'models/cycleCount';
 import { runCycleCountAnomalyAgent } from '@/lib/ai/agents/cycleCountAnomalyAgent';
 import { validateWithSchema, submitCycleCountLineSchema } from '@/lib/zod';
@@ -13,6 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const teamMember = await guardTeamAccess(req, res, 'cycle_count', 'count');
+    setAuditEvent(res, { resource: 'cycle_count', action: 'submit' });
     const { lines } = validateWithSchema(submitCycleCountLineSchema, req.body);
     const id = req.query.id as string;
 
