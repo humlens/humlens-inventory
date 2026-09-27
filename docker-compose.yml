@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16.4
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: admin
+      POSTGRES_USER: admin
+      POSTGRES_DB: inventory
+    ports:
+      - 5434:5432
+    volumes:
+      - inventory_db_data:/var/lib/postgresql/data
+
+volumes:
+  inventory_db_data:

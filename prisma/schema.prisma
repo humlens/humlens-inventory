@@ -1,0 +1,594 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================================================================
+// Tenant / Auth — Team is the tenant. Mirrors the procurement app's
+// Team/User/TeamMember/Role shape so the RBAC and session patterns are
+// identical across both products.
+// =========================================================================
+
+enum Role {
+  OWNER
+  ADMIN
+  WAREHOUSE_MANAGER
+  PROCUREMENT
+  STAFF
+  AUDITOR
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model User {
+  id                     String    @id @default(uuid())
+  name                   String
+  email                  String    @unique
+  emailVerified          DateTime?
+  password               String?
+  image                  String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @default(now()) @updatedAt
+  invalid_login_attempts Int       @default(0)
+  lockedAt               DateTime?
+  disabled               Boolean   @default(false)
+
+  accounts              Account[]
+  sessions              Session[]
+  teamMembers           TeamMember[]
+  invitationsSent       Invitation[]
+  createdItems          Item[]
+  createdSuppliers      Supplier[]
+  createdPurchaseOrders PurchaseOrder[] @relation("POCreatedBy")
+  approvedPurchaseOrders PurchaseOrder[] @relation("POApprovedBy")
+  receivedGoodsReceipts GoodsReceipt[]
+  stockTransactions     StockTransaction[]
+  requestedTransfers    StockTransfer[]
+  stockAdjustments      StockAdjustment[]
+  createdCycleCounts    CycleCount[]
+  agentActionsReviewed  AgentAction[]
+}
+
+model Team {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  domain      String?  @unique
+  defaultRole Role     @default(STAFF)
+  currency    String   @default("USD")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  members           TeamMember[]
+  invitations       Invitation[]
+  warehouses        Warehouse[]
+  categories        Category[]
+  items             Item[]
+  stockLevels       StockLevel[]
+  stockTransactions StockTransaction[]
+  suppliers         Supplier[]
+  purchaseOrders    PurchaseOrder[]
+  goodsReceipts     GoodsReceipt[]
+  stockTransfers    StockTransfer[]
+  stockAdjustments  StockAdjustment[]
+  cycleCounts       CycleCount[]
+  agentPolicy       AgentPolicy?
+  agentActions      AgentAction[]
+
+  @@index([domain])
+}
+
+model TeamMember {
+  id        String   @id @default(uuid())
+  teamId    String
+  userId    String
+  role      Role     @default(STAFF)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id        String   @id @default(uuid())
+  teamId    String
+  email     String
+  role      Role     @default(STAFF)
+  token     String   @unique
+  expires   DateTime
+  invitedBy String
+  createdAt DateTime @default(now())
+
+  team    Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  inviter User @relation(fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, email])
+  @@index([email])
+}
+
+// =========================================================================
+// Catalog — Warehouses, Categories, Items
+// =========================================================================
+
+model Warehouse {
+  id        String   @id @default(uuid())
+  teamId    String
+  name      String
+  code      String?
+  address   String?
+  city      String?
+  state     String?
+  country   String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  team              Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  stockLevels       StockLevel[]
+  stockTransactions StockTransaction[]
+  purchaseOrders    PurchaseOrder[]
+  goodsReceipts     GoodsReceipt[]
+  transfersFrom     StockTransfer[]    @relation("TransferFrom")
+  transfersTo       StockTransfer[]    @relation("TransferTo")
+  stockAdjustments  StockAdjustment[]
+  cycleCounts       CycleCount[]
+
+  @@unique([teamId, name])
+  @@index([teamId])
+}
+
+model Category {
+  id       String  @id @default(uuid())
+  teamId   String
+  name     String
+  parentId String?
+
+  team     Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  parent   Category?  @relation("CategoryParent", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryParent")
+  items    Item[]
+
+  @@unique([teamId, name])
+  @@index([teamId])
+}
+
+model Item {
+  id            String   @id @default(uuid())
+  teamId        String
+  sku           String
+  name          String
+  description   String?
+  categoryId          String?
+  unitOfMeasure       String   @default("unit")
+  costPrice           Decimal  @default(0) @db.Decimal(14, 2)
+  sellPrice           Decimal  @default(0) @db.Decimal(14, 2)
+  barcode             String?
+  reorderPoint        Int      @default(0)
+  reorderQty          Int      @default(0)
+  preferredSupplierId String?
+  isActive            Boolean  @default(true)
+  createdById         String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now()) @updatedAt
+
+  team              Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  category          Category?          @relation(fields: [categoryId], references: [id])
+  preferredSupplier Supplier?          @relation(fields: [preferredSupplierId], references: [id])
+  createdBy         User               @relation(fields: [createdById], references: [id])
+  stockLevels       StockLevel[]
+  stockTransactions StockTransaction[]
+  poLineItems       POLineItem[]
+  stockTransfers    StockTransfer[]
+  stockAdjustments  StockAdjustment[]
+  cycleCountLines   CycleCountLine[]
+  agentActions      AgentAction[]
+
+  @@unique([teamId, sku])
+  @@index([teamId])
+  @@index([categoryId])
+}
+
+// Maintained running balance per item/warehouse, kept in sync by every
+// stock-moving operation in the same DB transaction — see
+// models/stock.ts#applyStockMovement. Avoids re-summing the full
+// StockTransaction history on every read.
+model StockLevel {
+  id          String   @id @default(uuid())
+  teamId      String
+  itemId      String
+  warehouseId String
+  onHand      Int      @default(0)
+  reserved    Int      @default(0)
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  team      Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, warehouseId])
+  @@index([teamId])
+  @@index([warehouseId])
+}
+
+enum StockTransactionType {
+  RECEIPT
+  ISSUE
+  TRANSFER_OUT
+  TRANSFER_IN
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+}
+
+// Append-only ledger — the source of truth every StockLevel balance is
+// derived from. Every stock-affecting action (receiving, issuing,
+// transferring, adjusting) writes exactly one of these.
+model StockTransaction {
+  id            String               @id @default(uuid())
+  teamId        String
+  itemId        String
+  warehouseId   String
+  type          StockTransactionType
+  quantity      Int
+  reference     String?
+  note          String?
+  performedById String
+  createdAt     DateTime             @default(now())
+
+  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  item        Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  performedBy User      @relation(fields: [performedById], references: [id])
+
+  @@index([teamId])
+  @@index([itemId])
+  @@index([warehouseId])
+}
+
+// =========================================================================
+// Suppliers / Replenishment
+// =========================================================================
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Supplier {
+  id            String         @id @default(uuid())
+  teamId        String
+  name          String
+  email         String?
+  phone         String?
+  leadTimeDays  Int?
+  rating        Float?
+  status        SupplierStatus @default(ACTIVE)
+  notes         String?
+  createdById   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+
+  team              Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy         User            @relation(fields: [createdById], references: [id])
+  purchaseOrders    PurchaseOrder[]
+  preferredForItems Item[]
+
+  @@unique([teamId, name])
+  @@index([teamId])
+}
+
+enum POStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  ISSUED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id           String    @id @default(uuid())
+  teamId       String
+  poNumber     String
+  supplierId   String
+  warehouseId  String
+  status       POStatus  @default(DRAFT)
+  currency     String    @default("USD")
+  subtotal     Decimal   @default(0) @db.Decimal(14, 2)
+  tax          Decimal   @default(0) @db.Decimal(14, 2)
+  shipping     Decimal   @default(0) @db.Decimal(14, 2)
+  totalAmount  Decimal   @default(0) @db.Decimal(14, 2)
+  expectedDate DateTime?
+  notes        String?
+  createdById  String
+  approvedById String?
+  approvedAt   DateTime?
+  issuedAt     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+
+  team          Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  supplier      Supplier       @relation(fields: [supplierId], references: [id])
+  warehouse     Warehouse      @relation(fields: [warehouseId], references: [id])
+  createdBy     User           @relation("POCreatedBy", fields: [createdById], references: [id])
+  approvedBy    User?          @relation("POApprovedBy", fields: [approvedById], references: [id])
+  lineItems     POLineItem[]
+  goodsReceipts GoodsReceipt[]
+  agentActions  AgentAction[]
+
+  @@unique([teamId, poNumber])
+  @@index([teamId])
+  @@index([supplierId])
+  @@index([status])
+}
+
+model POLineItem {
+  id          String  @id @default(uuid())
+  poId        String
+  itemId      String
+  description String
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(14, 2)
+  receivedQty Int     @default(0)
+
+  purchaseOrder PurchaseOrder          @relation(fields: [poId], references: [id], onDelete: Cascade)
+  item          Item                   @relation(fields: [itemId], references: [id])
+  receiptLines  GoodsReceiptLineItem[]
+
+  @@index([poId])
+  @@index([itemId])
+}
+
+enum ReceiptStatus {
+  PENDING
+  PARTIAL
+  COMPLETE
+}
+
+model GoodsReceipt {
+  id           String        @id @default(uuid())
+  teamId       String
+  poId         String
+  warehouseId  String
+  receivedById String
+  status       ReceiptStatus @default(COMPLETE)
+  receivedAt   DateTime      @default(now())
+  notes        String?
+
+  team          Team                   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder          @relation(fields: [poId], references: [id])
+  warehouse     Warehouse              @relation(fields: [warehouseId], references: [id])
+  receivedBy    User                   @relation(fields: [receivedById], references: [id])
+  lineItems     GoodsReceiptLineItem[]
+
+  @@index([teamId])
+  @@index([poId])
+}
+
+model GoodsReceiptLineItem {
+  id               String  @id @default(uuid())
+  receiptId        String
+  poLineItemId     String
+  quantityReceived Int
+  condition        String?
+
+  receipt    GoodsReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  poLineItem POLineItem   @relation(fields: [poLineItemId], references: [id])
+
+  @@index([receiptId])
+  @@index([poLineItemId])
+}
+
+// =========================================================================
+// Stock movement — transfers between warehouses, manual adjustments, and
+// planned cycle counts.
+// =========================================================================
+
+enum TransferStatus {
+  PENDING
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+model StockTransfer {
+  id              String         @id @default(uuid())
+  teamId          String
+  itemId          String
+  quantity        Int
+  fromWarehouseId String
+  toWarehouseId   String
+  status          TransferStatus @default(PENDING)
+  requestedById   String
+  completedAt     DateTime?
+  note            String?
+  createdAt       DateTime       @default(now())
+
+  team          Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  item          Item      @relation(fields: [itemId], references: [id])
+  fromWarehouse Warehouse @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse @relation("TransferTo", fields: [toWarehouseId], references: [id])
+  requestedBy   User      @relation(fields: [requestedById], references: [id])
+
+  @@index([teamId])
+  @@index([itemId])
+}
+
+enum AdjustmentReason {
+  CYCLE_COUNT
+  DAMAGE
+  LOSS
+  FOUND
+  CORRECTION
+  OTHER
+}
+
+model StockAdjustment {
+  id            String           @id @default(uuid())
+  teamId        String
+  itemId        String
+  warehouseId   String
+  quantityDelta Int
+  reason        AdjustmentReason
+  note          String?
+  performedById String
+  createdAt     DateTime         @default(now())
+
+  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  item        Item      @relation(fields: [itemId], references: [id])
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  performedBy User      @relation(fields: [performedById], references: [id])
+
+  @@index([teamId])
+  @@index([itemId])
+}
+
+enum CycleCountStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model CycleCount {
+  id          String           @id @default(uuid())
+  teamId      String
+  warehouseId String
+  name        String
+  status      CycleCountStatus @default(PLANNED)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdById String
+  createdAt   DateTime         @default(now())
+
+  team      Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  warehouse Warehouse        @relation(fields: [warehouseId], references: [id])
+  createdBy User             @relation(fields: [createdById], references: [id])
+  lines     CycleCountLine[]
+
+  @@index([teamId])
+}
+
+model CycleCountLine {
+  id           String  @id @default(uuid())
+  cycleCountId String
+  itemId       String
+  expectedQty  Int
+  countedQty   Int?
+  varianceQty  Int?
+
+  cycleCount CycleCount @relation(fields: [cycleCountId], references: [id], onDelete: Cascade)
+  item       Item       @relation(fields: [itemId], references: [id])
+
+  @@index([cycleCountId])
+}
+
+// =========================================================================
+// AI-native layer — per-team autonomy policy + an audit log of every
+// autonomous action the agents took (or proposed). Mirrors the procurement
+// app's AgentPolicy/AgentAction pattern.
+// =========================================================================
+
+model AgentPolicy {
+  id                              String   @id @default(uuid())
+  teamId                          String   @unique
+  autoReorderEnabled              Boolean  @default(false)
+  autoReorderMaxAmount            Decimal  @default(0) @db.Decimal(14, 2)
+  autoReorderCategories           String[] @default([])
+  deadStockThresholdDays          Int      @default(90)
+  cycleCountVarianceThresholdPct  Float    @default(5.0)
+  updatedAt                       DateTime @default(now()) @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+enum AgentActionType {
+  AUTO_REORDER_SUGGESTION
+  DEAD_STOCK_ALERT
+  CYCLE_COUNT_ANOMALY
+  NL_STOCK_ADJUSTMENT
+  DEMAND_FORECAST_ALERT
+}
+
+enum AgentActionStatus {
+  PROPOSED
+  EXECUTED
+  REJECTED_BY_POLICY
+  OVERRIDDEN_BY_HUMAN
+}
+
+model AgentAction {
+  id              String            @id @default(uuid())
+  teamId          String
+  type            AgentActionType
+  status          AgentActionStatus @default(PROPOSED)
+  itemId          String?
+  purchaseOrderId String?
+  input           Json              @default("{}")
+  output          Json              @default("{}")
+  reasoning       String?
+  confidence      Float?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime          @default(now())
+
+  team          Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  item          Item?          @relation(fields: [itemId], references: [id])
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  reviewedBy    User?          @relation(fields: [reviewedById], references: [id])
+
+  @@index([teamId])
+  @@index([type])
+}
