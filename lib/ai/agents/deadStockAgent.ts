@@ -3,7 +3,7 @@ import { generateText } from 'ai';
 import { prisma } from '@/lib/prisma';
 import { logAgentAction } from 'models/agentAction';
 import { getDeadStockThresholdDays } from '@/lib/ai/policy';
-import { agentModel } from '@/lib/ai/provider';
+import { getAgentModel } from '@/lib/ai/provider';
 
 // Flags items sitting in stock with no outbound movement (an ISSUE, i.e.
 // actual consumption/sale) for longer than the team's configured threshold.
@@ -50,8 +50,10 @@ export async function runDeadStockAgent(teamId: string) {
     )
     .join('\n');
 
+  const ai = await getAgentModel(teamId);
+
   const { text, usage } = await generateText({
-    model: agentModel,
+    model: ai.model,
     prompt: `Summarize this dead-stock finding for an inventory dashboard in 2-3 sentences, plain language, no markdown:\n\n${summaryLines}`,
   });
 
@@ -73,7 +75,7 @@ export async function runDeadStockAgent(teamId: string) {
       { label: 'Units on hand', value: units },
       { label: 'Threshold', value: `${thresholdDays} days` },
     ],
-    aiModel: agentModel,
+    aiModel: ai.id,
     aiTokens: usage?.totalTokens,
     input: { thresholdDays, itemCount: flagged.length },
     output: { items: flagged.map((f) => ({ itemId: f.item.id, onHand: f.onHand, lastIssueAt: f.lastIssueAt })) },

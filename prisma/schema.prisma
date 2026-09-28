@@ -561,6 +561,13 @@ model AgentPolicy {
   autoReorderCategories           String[] @default([])
   deadStockThresholdDays          Int      @default(90)
   cycleCountVarianceThresholdPct  Float    @default(5.0)
+  // The model the team's agents run on: anthropic, openai, mistral or local (null: the deployment's default).
+  aiProvider                      String?
+  aiModel                         String?
+  // The team's own API key for that provider, encrypted (lib/secrets). Null: use the deployment's key.
+  aiApiKey                        String?
+  // For "local": the model server's OpenAI-compatible address (Ollama, LM Studio, vLLM). Null: LOCAL_AI_URL.
+  aiBaseUrl                       String?
   updatedAt                       DateTime @default(now()) @updatedAt
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)

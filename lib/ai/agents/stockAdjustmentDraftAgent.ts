@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { logAgentAction, proposeAction } from 'models/agentAction';
-import { agentModel } from '@/lib/ai/provider';
+import { getAgentModel } from '@/lib/ai/provider';
 
 const draftSchema = z.object({
   itemSku: z.string().describe('The SKU of the matching item from the provided catalog list'),
@@ -24,8 +24,10 @@ export async function draftStockMovementFromPrompt(params: { teamId: string; pro
     prisma.warehouse.findMany({ where: { teamId: params.teamId }, select: { id: true, name: true } }),
   ]);
 
+  const ai = await getAgentModel(params.teamId);
+
   const { object, usage } = await generateObject({
-    model: agentModel,
+    model: ai.model,
     schema: draftSchema,
     prompt: `A warehouse staff member wrote this plain-language stock update:\n\n"${params.prompt}"\n\nAvailable items:\n${items.map((i) => `${i.sku}: ${i.name}`).join('\n')}\n\nAvailable warehouses:\n${warehouses.map((w) => w.name).join('\n')}\n\nMatch it to exactly one item SKU and one warehouse name from those lists, and extract the movement type and quantity. Use RECEIPT for stock coming in from a supplier, ISSUE for stock going out (a sale/consumption), and ADJUSTMENT_IN/ADJUSTMENT_OUT for corrections found/lost.`,
   });
@@ -45,7 +47,7 @@ export async function draftStockMovementFromPrompt(params: { teamId: string; pro
         requestedById: params.requestedById,
         evidence: [{ label: 'Asked', value: params.prompt.slice(0, 200) }],
         reasoning: 'Matched the request to a known item and warehouse. Check the numbers and approve to record it.',
-        aiModel: agentModel,
+        aiModel: ai.id,
         aiTokens: usage?.totalTokens,
       })
     : await logAgentAction({
@@ -57,7 +59,7 @@ export async function draftStockMovementFromPrompt(params: { teamId: string; pro
         input: { prompt: params.prompt },
         output: { ...object, resolvedItemId: item?.id, resolvedWarehouseId: warehouse?.id },
         reasoning: 'Could not confidently match this to a known item or warehouse; the form was prefilled for a person to finish.',
-        aiModel: agentModel,
+        aiModel: ai.id,
         aiTokens: usage?.totalTokens,
         // Nothing to approve: the person finishes it in the form.
         reviewedAt: new Date(),
