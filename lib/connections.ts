@@ -2,6 +2,7 @@ import type { ConnectionKind, Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { decryptSecret, encryptSecret, maskSecret } from '@/lib/secrets';
+import { outboundFetch } from '@/lib/outboundFetch';
 
 // The other Humlens apps a team is connected to. INVENTORY / PROCUREMENT
 // connections are entered by an admin (the other app's address and an API
@@ -127,7 +128,7 @@ export async function callConnectedApp<T>(
 
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await outboundFetch(url, {
       method: init.method ?? 'GET',
       headers: { Authorization: `Bearer ${connection.secret}`, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),

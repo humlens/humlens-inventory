@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { type ColumnDef, type RowData, useTable } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -16,7 +17,8 @@ import {
 } from '@/lib/advancedFilter';
 import EmptyState from '@/components/EmptyState';
 import Checkbox from '@/components/data-table/Checkbox';
-import FilterSidebar, { prettyValue, type FilterColumn, type SavedFilterItem } from '@/components/data-table/FilterSidebar';
+import type { FilterColumn, SavedFilterItem } from '@/components/data-table/FilterSidebar';
+import { prettyValue } from '@/components/data-table/utils';
 import HeaderCell from '@/components/data-table/HeaderCell';
 import Pagination, { PAGE_SIZES } from '@/components/data-table/Pagination';
 import Toolbar, { type FilterChip } from '@/components/data-table/Toolbar';
@@ -183,6 +185,9 @@ function pinning(column: AnyColumn, layout: ColumnLayout): { style: CSSPropertie
 // renders only the rows in view, so large pages stay fast. Rows use flex
 // layout (not table auto-layout) because absolutely positioned virtualized
 // rows need explicit per-column widths — see each column's `size`.
+// The filter sidebar loads the first time filters are opened, not with every table.
+const FilterSidebar = dynamic(() => import('@/components/data-table/FilterSidebar'), { ssr: false });
+
 export default function DataTable<T extends RowData>({
   columns,
   data,
@@ -218,6 +223,10 @@ export default function DataTable<T extends RowData>({
     return () => observer.disconnect();
   }, []);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersLoaded, setFiltersLoaded] = useState(false);
+  useEffect(() => {
+    if (filtersOpen) setFiltersLoaded(true);
+  }, [filtersOpen]);
   const [filter, setFilterState] = useState<AdvancedFilter>(EMPTY_FILTER);
   const [activeFilterId, setActiveFilterId] = useState<string | null>(null);
   const [defaultFilterId, setDefaultFilterId] = useState<string | null>(null);
@@ -583,35 +592,37 @@ export default function DataTable<T extends RowData>({
 
       {data.length > 0 && <Pagination table={table} />}
 
-      <FilterSidebar
-        open={filtersOpen}
-        onClose={() => setFiltersOpen(false)}
-        columns={filterColumns}
-        filter={filter}
-        onChange={setFilter}
-        matchCount={table.getFilteredRowModel().rows.length}
-        totalCount={data.length}
-        savedFilters={savedFilters.items}
-        activeFilterId={activeFilterId}
-        defaultFilterId={defaultFilterId}
-        isModified={filterModified}
-        onApplySaved={applySaved}
-        onSaveNew={saveNewFilter}
-        onUpdateSaved={(item) => savedFilters.update(item, { filter }, `Updated “${item.name}”.`)}
-        onDeleteSaved={(item) => {
-          if (window.confirm(`Delete the saved filter “${item.name}”${item.shared ? ' for everyone on the team' : ''}?`)) {
-            savedFilters.remove(item);
+      {filtersLoaded && (
+        <FilterSidebar
+          open={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          columns={filterColumns}
+          filter={filter}
+          onChange={setFilter}
+          matchCount={table.getFilteredRowModel().rows.length}
+          totalCount={data.length}
+          savedFilters={savedFilters.items}
+          activeFilterId={activeFilterId}
+          defaultFilterId={defaultFilterId}
+          isModified={filterModified}
+          onApplySaved={applySaved}
+          onSaveNew={saveNewFilter}
+          onUpdateSaved={(item) => savedFilters.update(item, { filter }, `Updated “${item.name}”.`)}
+          onDeleteSaved={(item) => {
+            if (window.confirm(`Delete the saved filter “${item.name}”${item.shared ? ' for everyone on the team' : ''}?`)) {
+              savedFilters.remove(item);
+            }
+          }}
+          onToggleShared={(item) =>
+            savedFilters.update(
+              item,
+              { shared: !item.shared },
+              item.shared ? `“${item.name}” is now only visible to you.` : `Shared “${item.name}” with your team.`
+            )
           }
-        }}
-        onToggleShared={(item) =>
-          savedFilters.update(
-            item,
-            { shared: !item.shared },
-            item.shared ? `“${item.name}” is now only visible to you.` : `Shared “${item.name}” with your team.`
-          )
-        }
-        onToggleDefault={(item) => setDefaultFilterId((current) => (current === item.id ? null : item.id))}
-      />
+          onToggleDefault={(item) => setDefaultFilterId((current) => (current === item.id ? null : item.id))}
+        />
+      )}
     </div>
   );
 }

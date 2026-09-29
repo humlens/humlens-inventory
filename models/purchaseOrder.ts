@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { POStatus } from '@prisma/client';
 import { ApiError } from '@/lib/errors';
+import { assertTeamRefs } from '@/lib/teamRefs';
 
 export const listPurchaseOrders = async (teamId: string, params?: { status?: POStatus }) => {
   return prisma.purchaseOrder.findMany({
@@ -41,6 +42,7 @@ export const createPurchaseOrder = async (params: {
   shipping: number;
   lineItems: { itemId: string; description: string; quantity: number; unitPrice: number }[];
 }) => {
+  await assertTeamRefs(params.teamId, { supplier: params.supplierId, warehouse: params.warehouseId, item: params.lineItems.map((li) => li.itemId) });
   const subtotal = params.lineItems.reduce((sum, li) => sum + li.quantity * li.unitPrice, 0);
   const totalAmount = subtotal + params.tax + params.shipping;
   const poNumber = await nextPoNumber(params.teamId);

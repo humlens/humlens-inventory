@@ -1,6 +1,8 @@
-import { Role } from '@prisma/client';
+// Type-only: this file runs in the browser too (pages use it to show or hide
+// actions), and a value import would bundle Prisma's browser runtime.
+import type { Role } from '@prisma/client';
 
-type RoleType = (typeof Role)[keyof typeof Role];
+type RoleType = Role;
 
 export type Action =
   | 'create'
@@ -47,12 +49,12 @@ type RolePermissions = {
 };
 
 export const availableRoles: { id: RoleType; name: string; description: string }[] = [
-  { id: Role.OWNER, name: 'Owner', description: 'Full control, billing, and team management' },
-  { id: Role.ADMIN, name: 'Admin', description: 'Configures warehouses, catalog, policy, and approvals' },
-  { id: Role.WAREHOUSE_MANAGER, name: 'Warehouse Manager', description: 'Runs receiving, transfers, adjustments, and cycle counts' },
-  { id: Role.PROCUREMENT, name: 'Procurement', description: 'Manages suppliers and purchase orders' },
-  { id: Role.STAFF, name: 'Staff', description: 'Records day-to-day stock movement' },
-  { id: Role.AUDITOR, name: 'Auditor', description: 'Read-only access across the tenant for compliance review' },
+  { id: 'OWNER', name: 'Owner', description: 'Full control, billing, and team management' },
+  { id: 'ADMIN', name: 'Admin', description: 'Configures warehouses, catalog, policy, and approvals' },
+  { id: 'WAREHOUSE_MANAGER', name: 'Warehouse Manager', description: 'Runs receiving, transfers, adjustments, and cycle counts' },
+  { id: 'PROCUREMENT', name: 'Procurement', description: 'Manages suppliers and purchase orders' },
+  { id: 'STAFF', name: 'Staff', description: 'Records day-to-day stock movement' },
+  { id: 'AUDITOR', name: 'Auditor', description: 'Read-only access across the tenant for compliance review' },
 ];
 
 export const permissions: RolePermissions = {

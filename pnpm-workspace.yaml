@@ -1,0 +1,11 @@
+allowBuilds:
+  '@prisma/client': false
+  '@prisma/engines': false
+  prisma: false
+  unrs-resolver: false
+
+# Patched versions of packages pulled in by others (pnpm audit), same major
+# as what asks for them, except undici: the AI SDK's own later releases use 7.
+overrides:
+  undici: ^7.29.0
+  postcss: ^8.5.18

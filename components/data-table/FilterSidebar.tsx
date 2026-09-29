@@ -3,6 +3,7 @@ import { Plus, Search, Share2, Star, Trash2, Users, X } from 'lucide-react';
 
 import SidebarModal from '@/components/SidebarModal';
 import Checkbox from './Checkbox';
+import { prettyValue } from './utils';
 import {
   OPERATORS,
   activeConditions,
@@ -32,7 +33,6 @@ export type SavedFilterItem = {
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
-export const prettyValue = (value: string) => value.replaceAll('_', ' ');
 
 const inputClass =
   'h-9 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20';

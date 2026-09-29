@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
 
 import { handleApiError } from '@/lib/apiGuard';
-import { advancedFilterSchema } from '@/lib/advancedFilter';
+import { advancedFilterSchema } from '@/lib/advancedFilterSchema';
 import { tableKeySchema, validateWithSchema } from '@/lib/zod';
 import { throwIfNoTeamAccess } from 'models/team';
 import { createSavedFilter, listSavedFilters } from 'models/savedFilter';

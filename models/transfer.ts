@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { applyStockMovement } from './stock';
+import { assertTeamRefs } from '@/lib/teamRefs';
 
 export const listStockTransfers = async (teamId: string) => {
   return prisma.stockTransfer.findMany({
@@ -27,6 +28,7 @@ export const createStockTransfer = async (params: {
   requestedById: string;
   note?: string;
 }) => {
+  await assertTeamRefs(params.teamId, { item: params.itemId, warehouse: [params.fromWarehouseId, params.toWarehouseId] });
   if (params.fromWarehouseId === params.toWarehouseId) {
     throw new ApiError(400, 'Source and destination warehouses must be different.');
   }

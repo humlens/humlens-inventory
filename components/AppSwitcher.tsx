@@ -1,9 +1,9 @@
 import { ArrowUpRight } from 'lucide-react';
 
-import { APP_LABELS, THIS_APP, appUrls, type HumlensApp } from '@/lib/sso';
+import { APP_LABELS, THIS_APP, appUrls, type HumlensApp } from '@/lib/humlensApps';
 
 // Sidebar links to the other Humlens apps; you arrive signed in as yourself
-// (see lib/sso.ts). Only apps whose address is configured are shown.
+// (see lib/sso.ts and lib/humlensApps.ts). Only apps whose address is configured are shown.
 export default function AppSwitcher() {
   const others = (Object.keys(APP_LABELS) as HumlensApp[]).filter((app) => app !== THIS_APP && appUrls[app]);
   if (!others.length) return null;

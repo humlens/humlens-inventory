@@ -8,21 +8,9 @@ import crypto from 'crypto';
 // Needs HUMLENS_SSO_SECRET (the same value in every app) and the apps'
 // addresses in NEXT_PUBLIC_HUMLENS_{INVENTORY,PROCUREMENT,COMMERCE}_URL.
 
-export type HumlensApp = 'inventory' | 'procurement' | 'commerce';
+import { APP_LABELS, THIS_APP, appUrls, type HumlensApp } from './humlensApps';
 
-export const THIS_APP: HumlensApp = 'inventory';
-
-export const APP_LABELS: Record<HumlensApp, string> = {
-  inventory: 'Inventory',
-  procurement: 'Procurement',
-  commerce: 'Store admin',
-};
-
-export const appUrls: Record<HumlensApp, string | undefined> = {
-  inventory: process.env.NEXT_PUBLIC_HUMLENS_INVENTORY_URL,
-  procurement: process.env.NEXT_PUBLIC_HUMLENS_PROCUREMENT_URL,
-  commerce: process.env.NEXT_PUBLIC_HUMLENS_COMMERCE_URL,
-};
+export { APP_LABELS, THIS_APP, appUrls, type HumlensApp } from './humlensApps';
 
 // Where each app accepts a ticket.
 const RECEIVE_PATH: Record<HumlensApp, string> = {

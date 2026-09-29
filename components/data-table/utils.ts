@@ -36,3 +36,6 @@ export function downloadCsv(filename: string, header: string[], rows: unknown[][
   link.click();
   URL.revokeObjectURL(url);
 }
+
+/** Enum values for display: `PENDING_APPROVAL` → `PENDING APPROVAL`. */
+export const prettyValue = (value: string) => value.replaceAll('_', ' ');

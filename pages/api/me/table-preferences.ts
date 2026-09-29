@@ -5,7 +5,7 @@ import { getSession } from '@/lib/session';
 import { handleApiError } from '@/lib/apiGuard';
 import { ApiError } from '@/lib/errors';
 import { tableKeySchema, validateWithSchema } from '@/lib/zod';
-import { advancedFilterSchema } from '@/lib/advancedFilter';
+import { advancedFilterSchema } from '@/lib/advancedFilterSchema';
 import { deleteTablePreference, getTablePreference, saveTablePreference } from 'models/tablePreference';
 
 // A table is identified by its page route (e.g. "/teams/[slug]/items"), so a

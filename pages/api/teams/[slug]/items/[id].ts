@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 import { guardTeamAccess, handleApiError } from '@/lib/apiGuard';
 import { getItem, updateItem } from 'models/item';
+import { updateItemSchema, validateWithSchema } from '@/lib/zod';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const id = req.query.id as string;
@@ -15,7 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (req.method === 'PUT') {
       const teamMember = await guardTeamAccess(req, res, 'item', 'update');
-      res.status(200).json({ data: await updateItem(teamMember.teamId, id, req.body) });
+      res.status(200).json({ data: await updateItem(teamMember.teamId, id, validateWithSchema(updateItemSchema, req.body)) });
       return;
     }
 

@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
+import { assertTeamRefs } from '@/lib/teamRefs';
 
 export const listItems = async (teamId: string, params?: { search?: string; categoryId?: string; isActive?: boolean }) => {
   return prisma.item.findMany({
@@ -49,11 +51,16 @@ export const createItem = async (params: {
   reorderQty: number;
   preferredSupplierId?: string;
 }) => {
+  await assertTeamRefs(params.teamId, { category: params.categoryId, supplier: params.preferredSupplierId });
   return prisma.item.create({ data: params });
 };
 
-export const updateItem = async (teamId: string, id: string, data: Record<string, unknown>) => {
+export const updateItem = async (teamId: string, id: string, data: Prisma.ItemUncheckedUpdateInput) => {
   await prisma.item.findFirstOrThrow({ where: { id, teamId } });
+  await assertTeamRefs(teamId, {
+    category: typeof data.categoryId === 'string' ? data.categoryId : undefined,
+    supplier: typeof data.preferredSupplierId === 'string' ? data.preferredSupplierId : undefined,
+  });
   return prisma.item.update({ where: { id }, data });
 };
 

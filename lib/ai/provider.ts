@@ -6,6 +6,7 @@ import type { LanguageModel } from 'ai';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { decryptSecret } from '@/lib/secrets';
+import { outboundFetch } from '@/lib/outboundFetch';
 
 // Which model the team's agents run on. Each team can pick Claude, OpenAI or
 // Mistral in Settings → Agent policy, with its own API key (stored
@@ -45,7 +46,7 @@ export function modelFor(provider: AiProvider, modelId: string, apiKey?: string 
     const url = localServerUrl(baseUrl);
     if (!url) throw new ApiError(400, `No local model server is set. Add its address in Settings → Agent policy (Ollama: ${DEFAULT_LOCAL_URL}), or set LOCAL_AI_URL.`);
     // Chat Completions is the part of OpenAI's API that local servers implement.
-    const local = createOpenAI({ baseURL: url, apiKey: apiKey || process.env.LOCAL_AI_API_KEY || 'local', name: 'local' });
+    const local = createOpenAI({ baseURL: url, apiKey: apiKey || process.env.LOCAL_AI_API_KEY || 'local', name: 'local', fetch: (input, init) => outboundFetch(input instanceof Request ? input.url : input, init) });
     return { model: local.chat(modelId), id, source: baseUrl ? 'team server' : 'deployment server' };
   }
   const key = apiKey || process.env[aiProviders[provider].envKey];

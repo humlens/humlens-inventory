@@ -82,20 +82,20 @@ model User {
   lockedAt               DateTime?
   disabled               Boolean   @default(false)
 
-  accounts              Account[]
-  sessions              Session[]
-  teamMembers           TeamMember[]
-  invitationsSent       Invitation[]
-  createdItems          Item[]
-  createdSuppliers      Supplier[]
-  createdPurchaseOrders PurchaseOrder[] @relation("POCreatedBy")
-  approvedPurchaseOrders PurchaseOrder[] @relation("POApprovedBy")
-  receivedGoodsReceipts GoodsReceipt[]
-  stockTransactions     StockTransaction[]
-  requestedTransfers    StockTransfer[]
-  stockAdjustments      StockAdjustment[]
-  createdCycleCounts    CycleCount[]
-  agentActionsReviewed  AgentAction[]
+  accounts               Account[]
+  sessions               Session[]
+  teamMembers            TeamMember[]
+  invitationsSent        Invitation[]
+  createdItems           Item[]
+  createdSuppliers       Supplier[]
+  createdPurchaseOrders  PurchaseOrder[]    @relation("POCreatedBy")
+  approvedPurchaseOrders PurchaseOrder[]    @relation("POApprovedBy")
+  receivedGoodsReceipts  GoodsReceipt[]
+  stockTransactions      StockTransaction[]
+  requestedTransfers     StockTransfer[]
+  stockAdjustments       StockAdjustment[]
+  createdCycleCounts     CycleCount[]
+  agentActionsReviewed   AgentAction[]
   auditLogs              AuditLog[]
   tablePreferences       TablePreference[]
   savedFilters           SavedFilter[]
@@ -216,11 +216,11 @@ model Category {
 }
 
 model Item {
-  id            String   @id @default(uuid())
-  teamId        String
-  sku           String
-  name          String
-  description   String?
+  id                  String   @id @default(uuid())
+  teamId              String
+  sku                 String
+  name                String
+  description         String?
   categoryId          String?
   unitOfMeasure       String   @default("unit")
   costPrice           Decimal  @default(0) @db.Decimal(14, 2)
@@ -306,6 +306,7 @@ model StockTransaction {
   @@index([teamId])
   @@index([itemId])
   @@index([warehouseId])
+  @@index([teamId, type, createdAt])
 }
 
 // =========================================================================
@@ -318,18 +319,18 @@ enum SupplierStatus {
 }
 
 model Supplier {
-  id            String         @id @default(uuid())
-  teamId        String
-  name          String
-  email         String?
-  phone         String?
-  leadTimeDays  Int?
-  rating        Float?
-  status        SupplierStatus @default(ACTIVE)
-  notes         String?
-  createdById   String
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @default(now()) @updatedAt
+  id           String         @id @default(uuid())
+  teamId       String
+  name         String
+  email        String?
+  phone        String?
+  leadTimeDays Int?
+  rating       Float?
+  status       SupplierStatus @default(ACTIVE)
+  notes        String?
+  createdById  String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @default(now()) @updatedAt
 
   team              Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
   createdBy         User            @relation(fields: [createdById], references: [id])
@@ -385,6 +386,7 @@ model PurchaseOrder {
   @@index([teamId])
   @@index([supplierId])
   @@index([status])
+  @@index([teamId, status])
 }
 
 model POLineItem {
@@ -534,7 +536,7 @@ model CycleCount {
 }
 
 model CycleCountLine {
-  id           String  @id @default(uuid())
+  id           String @id @default(uuid())
   cycleCountId String
   itemId       String
   expectedQty  Int
@@ -554,21 +556,21 @@ model CycleCountLine {
 // =========================================================================
 
 model AgentPolicy {
-  id                              String   @id @default(uuid())
-  teamId                          String   @unique
-  autoReorderEnabled              Boolean  @default(false)
-  autoReorderMaxAmount            Decimal  @default(0) @db.Decimal(14, 2)
-  autoReorderCategories           String[] @default([])
-  deadStockThresholdDays          Int      @default(90)
-  cycleCountVarianceThresholdPct  Float    @default(5.0)
+  id                             String   @id @default(uuid())
+  teamId                         String   @unique
+  autoReorderEnabled             Boolean  @default(false)
+  autoReorderMaxAmount           Decimal  @default(0) @db.Decimal(14, 2)
+  autoReorderCategories          String[] @default([])
+  deadStockThresholdDays         Int      @default(90)
+  cycleCountVarianceThresholdPct Float    @default(5.0)
   // The model the team's agents run on: anthropic, openai, mistral or local (null: the deployment's default).
-  aiProvider                      String?
-  aiModel                         String?
+  aiProvider                     String?
+  aiModel                        String?
   // The team's own API key for that provider, encrypted (lib/secrets). Null: use the deployment's key.
-  aiApiKey                        String?
+  aiApiKey                       String?
   // For "local": the model server's OpenAI-compatible address (Ollama, LM Studio, vLLM). Null: LOCAL_AI_URL.
-  aiBaseUrl                       String?
-  updatedAt                       DateTime @default(now()) @updatedAt
+  aiBaseUrl                      String?
+  updatedAt                      DateTime @default(now()) @updatedAt
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 }
@@ -637,6 +639,8 @@ model AgentAction {
   @@index([teamId])
   @@index([type])
   @@index([teamId, status])
+  @@index([teamId, tool, createdAt])
+  @@index([teamId, type, createdAt])
 }
 
 // =========================================================================
@@ -794,7 +798,6 @@ model OutboundEvent {
   @@index([status, nextAttemptAt])
   @@index([teamId, createdAt])
 }
-
 
 // =========================================================================
 // Stock reservations — units held for a checkout that hasn't completed.

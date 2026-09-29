@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { applyStockMovement } from './stock';
+import { assertTeamRefs } from '@/lib/teamRefs';
 
 export const listCycleCounts = async (teamId: string) => {
   return prisma.cycleCount.findMany({
@@ -30,6 +31,7 @@ export const createCycleCount = async (params: {
   itemIds: string[];
   createdById: string;
 }) => {
+  await assertTeamRefs(params.teamId, { warehouse: params.warehouseId, item: params.itemIds });
   const levels = await prisma.stockLevel.findMany({
     where: { teamId: params.teamId, warehouseId: params.warehouseId, itemId: { in: params.itemIds } },
   });

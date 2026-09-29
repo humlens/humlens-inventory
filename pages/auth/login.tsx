@@ -21,7 +21,7 @@ export default function Login() {
     setLoading(false);
 
     if (result?.error) {
-      toast.error('Invalid email or password.');
+      toast.error(result.error === 'too-many-attempts' ? 'Too many sign-in attempts. Wait 15 minutes and try again.' : 'Invalid email or password.');
       return;
     }
 

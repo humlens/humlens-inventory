@@ -6,6 +6,7 @@ import { createTeam } from 'models/team';
 import { handleApiError } from '@/lib/apiGuard';
 import { validateWithSchema } from '@/lib/zod';
 import { ApiError } from '@/lib/errors';
+import { clientAddress, hit } from '@/lib/rateLimit';
 
 const signupSchema = z.object({
   name: z.string().min(1),
@@ -21,6 +22,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Five sign-ups per address an hour.
+    const wait = hit(`signup:${clientAddress(req.headers, req.socket?.remoteAddress)}`, 5, 3_600_000);
+    if (wait) {
+      res.setHeader('Retry-After', String(wait));
+      throw new ApiError(429, 'Too many sign-ups from this address. Try again later.');
+    }
     const { name, email, password, teamName } = validateWithSchema(signupSchema, req.body);
 
     if (await getUserByEmail(email)) {

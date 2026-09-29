@@ -14,9 +14,8 @@ export const hashApiKey = (key: string) => crypto.createHash('sha256').update(ke
 // as the member who created it, with that member's current role, so revoking
 // the member or lowering their role takes effect on the key too. Writes are
 // audit-logged under that member, with source API_KEY.
-export async function guardApiKey(req: NextApiRequest, res: NextApiResponse, resource: Resource, action: Action) {
-  const header = req.headers.authorization ?? '';
-  const raw = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+/** The key (not revoked) and the member it acts as. Throws 401 for anything else. */
+export async function findApiKey(raw: string) {
   if (!raw.startsWith(API_KEY_PREFIX)) throw new ApiError(401, 'Missing or invalid API key.');
 
   const key = await prisma.apiKey.findUnique({ where: { keyHash: hashApiKey(raw) }, include: { team: true } });
@@ -27,6 +26,13 @@ export async function guardApiKey(req: NextApiRequest, res: NextApiResponse, res
     include: { user: { select: { id: true, name: true, email: true } } },
   });
   if (!member) throw new ApiError(401, 'The member who created this API key has left the team. Create a new key.');
+  return { key, member };
+}
+
+export async function guardApiKey(req: NextApiRequest, res: NextApiResponse, resource: Resource, action: Action) {
+  const header = req.headers.authorization ?? '';
+  const raw = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  const { key, member } = await findApiKey(raw);
   if (!can(member.role, resource, action)) {
     throw new ApiError(403, `This API key's owner does not have permission to ${action} ${resource}.`);
   }

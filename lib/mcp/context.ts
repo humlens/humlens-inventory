@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import { ApiError } from '@/lib/errors';
 import { can, Action, Resource } from '@/lib/permissions';
 import { getUserByEmail } from 'models/user';
@@ -8,7 +10,20 @@ import { recordAudit } from '@/lib/audit';
 // the caller-supplied email — there's no separate "service account" concept,
 // so agent actions taken via MCP are attributable to the same person a UI
 // action would be, and are subject to the same RBAC checks.
+// Set by the HTTP endpoint when the caller authenticated with a team API
+// key: every tool call is then held to that key's team and member, whatever
+// team or email the arguments name. Unset for the deployment token and the
+// local stdio server, which may act for any member.
+type McpScope = { teamSlug: string; email: string };
+const scope = new AsyncLocalStorage<McpScope>();
+export const runInMcpScope = <T>(value: McpScope, run: () => T) => scope.run(value, run);
+
 export async function resolveMcpActor(teamSlug: string, actingUserEmail: string) {
+  const limit = scope.getStore();
+  if (limit && teamSlug !== limit.teamSlug) throw new ApiError(403, `This API key belongs to the team "${limit.teamSlug}".`);
+  if (limit && actingUserEmail.toLowerCase() !== limit.email.toLowerCase()) {
+    throw new ApiError(403, `This API key acts as ${limit.email}; use that as actingUserEmail.`);
+  }
   const user = await getUserByEmail(actingUserEmail);
   if (!user) {
     throw new ApiError(404, `No user found for ${actingUserEmail}.`);

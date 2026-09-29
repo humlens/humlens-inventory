@@ -4,6 +4,7 @@ import type { ConnectionKind, OutboundEvent, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { APP_NAMES, ConnectionError, callConnectedApp, getConnection, markConnection } from '@/lib/connections';
 import { signPayload } from '@/lib/secrets';
+import { outboundFetch } from '@/lib/outboundFetch';
 
 // Every message to another Humlens app goes through here: it's stored first
 // (so nothing is lost if the other app is down), sent straight away, and
@@ -97,7 +98,7 @@ async function send(event: OutboundEvent) {
       const timestamp = String(Math.floor(Date.now() / 1000));
       let res: Response;
       try {
-        res = await fetch(connection.url, {
+        res = await outboundFetch(connection.url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

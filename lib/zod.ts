@@ -58,6 +58,10 @@ export const createItemSchema = z.object({
   preferredSupplierId: z.string().optional(),
 });
 
+// Editing an item: the same fields as creating one, all optional, plus
+// archiving. Unknown keys (teamId, relations) are dropped, so they can't be written.
+export const updateItemSchema = createItemSchema.partial().extend({ isActive: z.boolean().optional() });
+
 export const stockTransactionSchema = z.object({
   itemId: z.string().min(1),
   warehouseId: z.string().min(1),

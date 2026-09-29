@@ -1,6 +1,5 @@
 import { Command } from 'cmdk';
 import { useRouter } from 'next/router';
-import { useHotkeys } from 'react-hotkeys-hook';
 import { useSelector } from '@tanstack/react-store';
 import {
   Inbox,
@@ -19,8 +18,9 @@ import {
   PlusCircle,
   Search,
 } from 'lucide-react';
+import { useState } from 'react';
 
-import { appUiStore, closeCommandPalette, toggleCommandPalette, pushRecentItem } from '@/lib/store';
+import { appUiStore, closeCommandPalette, openAssistant, pushRecentItem } from '@/lib/store';
 import { iconToneClasses, type IconTone } from '@/lib/iconTones';
 
 const navCommands: { href: string; label: string; icon: typeof LayoutDashboard; tone: IconTone }[] = [
@@ -56,14 +56,16 @@ export default function CommandPalette() {
   const router = useRouter();
   const slug = router.query.slug as string;
   const open = useSelector(appUiStore, (s) => s.commandPaletteOpen);
+  const [query, setQuery] = useState('');
 
-  // Global mod+k opens the palette from anywhere, including form fields —
-  // this is the app's primary keyboard entry point, so it must never be
-  // shadowed by an input's default handling.
-  useHotkeys('mod+k', (e) => {
-    e.preventDefault();
-    toggleCommandPalette();
-  }, { enableOnFormTags: true, enableOnContentEditable: true });
+  // The mod+k shortcut lives in CommandPaletteLauncher, which loads this.
+
+  // Anything typed can go to the assistant as a question or instruction.
+  const ask = () => {
+    closeCommandPalette();
+    openAssistant(query);
+    setQuery('');
+  };
 
   const go = (href: string) => {
     const target = `/teams/${slug}/${href}`;
@@ -87,7 +89,9 @@ export default function CommandPalette() {
           <Search size={16} className="text-gray-400" />
           <Command.Input
             autoFocus
-            placeholder="Jump to a page or create something…"
+            value={query}
+            onValueChange={setQuery}
+            placeholder="Jump to a page, create something, or ask AI…"
             className="w-full bg-transparent py-3.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
           />
           <kbd className="hidden rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 sm:block">
@@ -95,7 +99,23 @@ export default function CommandPalette() {
           </kbd>
         </div>
         <Command.List className="max-h-80 overflow-y-auto p-2">
-          <Command.Empty className="px-3 py-6 text-center text-sm text-gray-400">No results found.</Command.Empty>
+          {!query.trim() && <Command.Empty className="px-3 py-6 text-center text-sm text-gray-400">No results found.</Command.Empty>}
+
+          {query.trim() && (
+            <Command.Group forceMount heading="Assistant" className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400 [&_[cmdk-group-items]]:mt-1">
+              <Command.Item
+                forceMount
+                value={`ask-ai ${query}`}
+                onSelect={ask}
+                className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm normal-case tracking-normal text-gray-700 data-[selected=true]:bg-purple-50 data-[selected=true]:text-purple-700"
+              >
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${iconToneClasses.purple}`}>
+                  <Sparkles size={13} strokeWidth={2.25} />
+                </span>
+                <span className="truncate">Ask AI: “{query.trim()}”</span>
+              </Command.Item>
+            </Command.Group>
+          )}
 
           <Command.Group heading="Navigate" className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400 [&_[cmdk-group-items]]:mt-1">
             {navCommands.map((c) => (

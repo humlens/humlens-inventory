@@ -11,6 +11,7 @@ import { approveAgentAction, getAgentInbox, listAgentActions, rejectAgentAction,
 import { runAction } from '@/lib/actions';
 import { runReorderAgent } from '@/lib/ai/agents/reorderAgent';
 import { draftStockMovementFromPrompt } from '@/lib/ai/agents/stockAdjustmentDraftAgent';
+import { getDemandSummary } from '@/lib/ai/demand';
 
 const json = (data: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
@@ -102,6 +103,26 @@ export function createInventoryMcpServer() {
     async ({ teamSlug, actingUserEmail, warehouseId, itemId, lowStockOnly }) => {
       const actor = await guardMcpAction(teamSlug, actingUserEmail, 'stock_level', 'read');
       return json(await listStockLevels(actor.team.id, { warehouseId, itemId, lowStockOnly }));
+    }
+  );
+
+  server.registerTool(
+    'get_demand',
+    {
+      title: 'Get sales velocity and stock runway',
+      description:
+        'Per item: units sold in the window, per day, days of stock left, units on open purchase orders, and whether it is below its reorder point. Sorted soonest-to-run-out first.',
+      inputSchema: {
+        teamSlug: z.string(),
+        actingUserEmail: z.string().email(),
+        days: z.number().int().min(7).max(365).default(30),
+        search: z.string().optional(),
+        limit: z.number().int().positive().max(200).default(50),
+      },
+    },
+    async ({ teamSlug, actingUserEmail, days, search, limit }) => {
+      const actor = await guardMcpAction(teamSlug, actingUserEmail, 'stock_level', 'read');
+      return json(await getDemandSummary(actor.team.id, { days, search, limit }));
     }
   );
 

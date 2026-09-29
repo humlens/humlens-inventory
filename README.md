@@ -1,5 +1,11 @@
 # Humlens Inventory
 
+## Licence
+
+This is proprietary Humlens software. Self-hosted production use, redistribution and
+managed-service use require a written commercial agreement with Humlens. See the
+[BYOC commercial licence](LICENSE).
+
 Stock across warehouses: items, stock levels, transfers, cycle counts, receiving, and AI agents that work within limits you set.
 
 This app runs on its own. It can also connect to Humlens Commerce and Procurement: see

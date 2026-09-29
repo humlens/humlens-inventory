@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { AdjustmentReason } from '@prisma/client';
 import { applyStockMovement } from './stock';
+import { assertTeamRefs } from '@/lib/teamRefs';
 
 export const listStockAdjustments = async (teamId: string) => {
   return prisma.stockAdjustment.findMany({
@@ -23,6 +24,7 @@ export const createStockAdjustment = async (params: {
   note?: string;
   performedById: string;
 }) => {
+  await assertTeamRefs(params.teamId, { item: params.itemId, warehouse: params.warehouseId });
   const adjustment = await prisma.stockAdjustment.create({ data: params });
 
   await applyStockMovement({

@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { StockTransactionType } from '@prisma/client';
 import { ApiError } from '@/lib/errors';
 import { notifyStore } from '@/lib/outbox';
+import { assertTeamRefs } from '@/lib/teamRefs';
 
 const OUTBOUND: StockTransactionType[] = ['ISSUE', 'TRANSFER_OUT', 'ADJUSTMENT_OUT'];
 const INBOUND: StockTransactionType[] = ['RECEIPT', 'TRANSFER_IN', 'ADJUSTMENT_IN'];
@@ -20,6 +21,7 @@ export const applyStockMovement = async (params: {
   note?: string;
   performedById: string;
 }) => {
+  await assertTeamRefs(params.teamId, { item: params.itemId, warehouse: params.warehouseId });
   const { teamId, itemId, warehouseId, type, quantity, reference, note, performedById } = params;
 
   if (quantity <= 0) {

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { POStatus, ReceiptStatus } from '@prisma/client';
 import { applyStockMovement } from './stock';
+import { assertPoLines, assertTeamRefs } from '@/lib/teamRefs';
 
 export const listGoodsReceipts = async (teamId: string, poId?: string) => {
   return prisma.goodsReceipt.findMany({
@@ -22,10 +23,12 @@ export const createGoodsReceipt = async (params: {
   notes?: string;
   lineItems: { poLineItemId: string; quantityReceived: number; condition?: string }[];
 }) => {
+  await assertTeamRefs(params.teamId, { warehouse: params.warehouseId });
   const po = await prisma.purchaseOrder.findFirstOrThrow({
     where: { id: params.poId, teamId: params.teamId },
     include: { lineItems: true },
   });
+  await assertPoLines(po.id, params.lineItems.map((li) => li.poLineItemId));
 
   const receipt = await prisma.goodsReceipt.create({
     data: {

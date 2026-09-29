@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 
@@ -17,7 +18,7 @@ export default function McpSettings({ userEmail }: { userEmail: string }) {
       mcpServers: {
         inventory: {
           url: `${appUrl}/api/mcp`,
-          headers: { Authorization: 'Bearer <MCP_SERVER_TOKEN>' },
+          headers: { Authorization: 'Bearer <your API key>' },
         },
       },
     },
@@ -39,11 +40,15 @@ export default function McpSettings({ userEmail }: { userEmail: string }) {
         <div>
           <p className="label">Authentication</p>
           <p className="text-sm text-gray-600">
-            Bearer token — set <code className="rounded bg-gray-100 px-1">MCP_SERVER_TOKEN</code> in your deployment
-            environment, and tool calls take your team slug (<code className="rounded bg-gray-100 px-1">{slug}</code>)
-            plus <code className="rounded bg-gray-100 px-1">actingUserEmail</code> (
-            <code className="rounded bg-gray-100 px-1">{userEmail}</code>) so every action is attributed to a real
-            team member and checked against their role.
+            Bearer token: an API key from{' '}
+            <Link href={`/teams/${slug}/settings/api-keys`} className="text-indigo-600 hover:underline">
+              API keys
+            </Link>
+            . Tool calls take your team slug (<code className="rounded bg-gray-100 px-1">{slug}</code>) plus{' '}
+            <code className="rounded bg-gray-100 px-1">actingUserEmail</code> (
+            <code className="rounded bg-gray-100 px-1">{userEmail}</code>); a key only works for this team and acts as
+            the member who created it, with their role&apos;s permissions. Operators can instead use the deployment&apos;s{' '}
+            <code className="rounded bg-gray-100 px-1">MCP_SERVER_TOKEN</code>, which can act for any team.
           </p>
         </div>
         <div>

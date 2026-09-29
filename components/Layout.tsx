@@ -23,9 +23,11 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import CommandPalette from '@/components/CommandPalette';
+import CommandPaletteLauncher from '@/components/CommandPaletteLauncher';
 import HumlensMark from '@/components/HumlensMark';
-import { openCommandPalette } from '@/lib/store';
+import AssistantLauncher from '@/components/assistant/AssistantLauncher';
+import { assistantConfig } from '@/components/assistant/config';
+import { openCommandPalette, toggleAssistant } from '@/lib/store';
 import { iconToneClasses, type IconTone } from '@/lib/iconTones';
 import AppSwitcher from '@/components/AppSwitcher';
 
@@ -225,20 +227,31 @@ export default function Layout({
             )}
             {title && <h1 className="truncate text-lg font-semibold tracking-tight text-gray-900">{title}</h1>}
           </div>
-          <button
-            onClick={openCommandPalette}
-            className="flex shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-400 shadow-sm hover:border-gray-300 hover:text-gray-600 sm:px-3"
-          >
-            <Search size={14} />
-            <span className="hidden sm:inline">Search</span>
-            <kbd className="hidden rounded border border-gray-200 bg-gray-50 px-1 py-0.5 font-sans text-[10px] font-medium text-gray-400 sm:inline">
-              ⌘K
-            </kbd>
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={openCommandPalette}
+              className="flex shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-400 shadow-sm hover:border-gray-300 hover:text-gray-600 sm:px-3"
+            >
+              <Search size={14} />
+              <span className="hidden sm:inline">Search</span>
+              <kbd className="hidden rounded border border-gray-200 bg-gray-50 px-1 py-0.5 font-sans text-[10px] font-medium text-gray-400 sm:inline">
+                ⌘K
+              </kbd>
+            </button>
+            <button
+              onClick={toggleAssistant}
+              title="Assistant (⌘J)"
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1.5 text-xs font-medium text-purple-700 shadow-sm hover:border-purple-300 hover:bg-purple-100 sm:px-3"
+            >
+              <Sparkles size={14} />
+              <span className="hidden sm:inline">Ask AI</span>
+            </button>
+          </div>
         </header>
         <main className="flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">{children}</main>
       </div>
-      <CommandPalette />
+      <CommandPaletteLauncher />
+      <AssistantLauncher config={assistantConfig} />
     </div>
   );
 }
