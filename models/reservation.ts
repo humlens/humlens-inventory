@@ -125,6 +125,17 @@ export async function endReservation(teamId: string, reference: string, status: 
   return describe(ended.reservation);
 }
 
+// The checkout became an order that still has to be picked and shipped: keep
+// the units held (not on sale, still on hand) until the store records the
+// shipment, which consumes the hold. Only an active hold can be committed.
+export const COMMITTED_HOLD_DAYS = 90;
+
+export async function commitReservation(teamId: string, reference: string) {
+  const expiresAt = new Date(Date.now() + COMMITTED_HOLD_DAYS * 86_400_000);
+  await prisma.reservation.updateMany({ where: { teamId, reference, status: 'ACTIVE' }, data: { expiresAt } });
+  return getReservation(teamId, reference);
+}
+
 export const getReservation = async (teamId: string, reference: string) => {
   const reservation = await prisma.reservation.findUnique({ where: { teamId_reference: { teamId, reference } } });
   return reservation ? describe(reservation) : null;
@@ -139,6 +150,49 @@ export async function releaseExpiredReservations(limit = 100) {
   });
   for (const reservation of expired) await endReservation(reservation.teamId, reservation.reference, 'EXPIRED');
   return expired.length;
+}
+
+// A checkout can hold stock for at most MAX_HOLD_MINUTES, so an active hold
+// that runs longer than that from when it was made can only have been
+// committed: it's a placed order waiting to be picked and shipped. Anything
+// shorter is a checkout still in progress.
+export const isHeldForOrder = (reservation: { createdAt: Date; expiresAt: Date }) =>
+  reservation.expiresAt.getTime() - reservation.createdAt.getTime() > MAX_HOLD_MINUTES * 60_000;
+
+// The pick list: active holds, oldest first so the longest-waiting orders get
+// shipped first, with item names for the pickers. Checkouts in progress are
+// left out unless asked for, since they may never become orders.
+export async function listPickList(teamId: string, params?: { warehouseId?: string; includeCheckouts?: boolean }) {
+  const active = await prisma.reservation.findMany({
+    where: { teamId, status: 'ACTIVE', expiresAt: { gt: new Date() }, warehouseId: params?.warehouseId },
+    orderBy: { createdAt: 'asc' },
+    take: 500,
+    include: { warehouse: { select: { id: true, name: true } } },
+  });
+  const listed = params?.includeCheckouts ? active : active.filter(isHeldForOrder);
+
+  const itemIds = [...new Set(listed.flatMap((reservation) => (reservation.lines as ReservedLine[]).map((line) => line.itemId)))];
+  const items = await prisma.item.findMany({ where: { teamId, id: { in: itemIds } }, select: { id: true, name: true } });
+  const names = new Map(items.map((item) => [item.id, item.name]));
+
+  return listed.map((reservation) => {
+    const lines = (reservation.lines as ReservedLine[]).map((line) => ({
+      itemId: line.itemId,
+      sku: line.sku,
+      name: names.get(line.itemId) ?? line.sku,
+      quantity: line.quantity,
+    }));
+    return {
+      id: reservation.id,
+      reference: reservation.reference,
+      purpose: isHeldForOrder(reservation) ? ('order' as const) : ('checkout' as const),
+      warehouse: reservation.warehouse,
+      lines,
+      units: lines.reduce((sum, line) => sum + line.quantity, 0),
+      createdAt: reservation.createdAt.toISOString(),
+      expiresAt: reservation.expiresAt.toISOString(),
+    };
+  });
 }
 
 export const listReservations = (teamId: string, status?: ReservationStatus) =>

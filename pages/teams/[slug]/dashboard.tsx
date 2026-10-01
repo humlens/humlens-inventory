@@ -3,7 +3,7 @@ import type { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Package, AlertTriangle, ShoppingCart, Sparkles, ArrowRight } from 'lucide-react';
+import { LayoutDashboard, Package, PackageOpen, AlertTriangle, ShoppingCart, Sparkles, ArrowRight } from 'lucide-react';
 
 import Layout from '@/components/Layout';
 import StatCard from '@/components/StatCard';
@@ -39,6 +39,11 @@ export default function Dashboard({ role }: { role: string }) {
     queryFn: () => apiFetch<any[]>(`/api/teams/${slug}/stock-transactions`),
     enabled: !!slug,
   });
+  const { data: pickList } = useQuery({
+    queryKey: ['pick-list', slug, '', false],
+    queryFn: () => apiFetch<any[]>(`/api/teams/${slug}/pick-list?warehouseId=&includeCheckouts=false`),
+    enabled: !!slug,
+  });
   const { data: agentActions } = useQuery({
     queryKey: ['agent-actions', slug],
     queryFn: () => apiFetch<any[]>(`/api/teams/${slug}/agent-actions`),
@@ -67,7 +72,10 @@ export default function Dashboard({ role }: { role: string }) {
         <span className="badge bg-gray-100 text-gray-600 ring-gray-500/10">Signed in as {role}</span>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <Link href={`/teams/${slug}/pick-list`}>
+          <StatCard label="Orders waiting to ship" value={String(pickList?.length ?? 0)} icon={PackageOpen} tone="brand" />
+        </Link>
         <StatCard label="Low stock items" value={String(stockLevels?.length ?? 0)} icon={AlertTriangle} tone="amber" />
         <StatCard label="Open purchase orders" value={String(openPOs)} icon={ShoppingCart} tone="brand" />
         <StatCard label="Inventory value" value={`$${totalValue.toLocaleString()}`} icon={Package} tone="emerald" />

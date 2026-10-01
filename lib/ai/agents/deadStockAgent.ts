@@ -1,5 +1,6 @@
 import { generateText } from 'ai';
 
+import { notifyStore } from '@/lib/outbox';
 import { prisma } from '@/lib/prisma';
 import { logAgentAction } from 'models/agentAction';
 import { getDeadStockThresholdDays } from '@/lib/ai/policy';
@@ -42,6 +43,19 @@ export async function runDeadStockAgent(teamId: string) {
   if (flagged.length === 0) {
     return null;
   }
+
+  // A connected store proposes a markdown on each one (the store waits 30 days before proposing
+  // the same SKU again). Sent before the summary, so it doesn't depend on an AI model being set up.
+  const now = Date.now();
+  await notifyStore(teamId, 'stock.idle', {
+    thresholdDays,
+    items: flagged.map((f) => ({
+      sku: f.item.sku,
+      onHand: f.onHand,
+      lastIssueAt: f.lastIssueAt?.toISOString() ?? null,
+      idleDays: Math.floor((now - (f.lastIssueAt ?? f.item.createdAt).getTime()) / 86_400_000),
+    })),
+  }).catch((error) => console.error('Could not queue the idle-stock notification', error));
 
   const summaryLines = flagged
     .map(

@@ -9,6 +9,7 @@ import {
   Warehouse,
   ClipboardList,
   ArrowLeftRight,
+  PackageOpen,
   SlidersHorizontal,
   ListChecks,
   Truck,
@@ -54,6 +55,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: 'stock-levels', label: 'Stock Levels', icon: ClipboardList, tone: 'emerald' },
       { href: 'stock-transfers', label: 'Transfers', icon: ArrowLeftRight, tone: 'cyan' },
+      { href: 'pick-list', label: 'To pick & ship', icon: PackageOpen, tone: 'fuchsia' },
       { href: 'stock-adjustments', label: 'Adjustments', icon: SlidersHorizontal, tone: 'orange' },
       { href: 'cycle-counts', label: 'Cycle Counts', icon: ListChecks, tone: 'violet' },
     ],
